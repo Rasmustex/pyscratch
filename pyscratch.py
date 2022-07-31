@@ -29,14 +29,18 @@ class Block: # maybe do some of the value processing in the initialiser
             case "procedures_call":
                 return OPCODE.CALL_PROC
             case opcode:
+                return None
                 assert False,f'opcode {opcode} not implemented yet'
-                eprint("Unrecognised opcode: ", op)
-                exit(1)
 
 class ProcCall(Block): # include procedure name and stuff
     def __init__(self, oc: OPCODE, inputs: dict, prnt: str, nxt: str, fields: dict, scope_level: int, proccode: str):
         super().__init__(oc, inputs, prnt, nxt, fields, scope_level)
         self.proccode = proccode
+
+class ProcProt(Block): # include procedure name and stuff
+    def __init__(self, oc: OPCODE, inputs: dict, prnt: str, nxt: str, fields: dict, scope_level: int, argnames: list[str]):
+        super().__init__(oc, inputs, prnt, nxt, fields, scope_level)
+        self.argnames = argnames
 
 def main():
     progname, fname = handle_args(sys.argv)
@@ -80,8 +84,8 @@ def translate_program(program: dict):
     """
     Translates parsed scratch JSON file to python
     """
-    output = []
-    procs = program_parse_blocks(program)
+    blocks = program["blocks"]
+    procs = program_parse_blocks(blocks)
     variables = program_get_vars(program)
 
     for variable in variables:
@@ -93,25 +97,29 @@ def translate_program(program: dict):
     for proc_id in procs:
         proc = procs[proc_id]
         proc_name, entry_point = proc_id.split(" ")
-        print("def " + proc_name + "():") # TODO: function arguments
+        if proc_name != "main":
+            argnames = proc[entry_point].argnames
+            print("def " + proc_name + "(" + ''.join(c for c in argnames if c not in "[]\"") + "):") # TODO: prettier, check multiple function arguments
+        else:
+            print("def " + proc_name + "():") # TODO: function arguments
+
         for variable in variables:
             var_name = variable[0].replace(" ", "_")
             print("\tglobal " + var_name)
 
         print()
-        current_id = entry_point
+        current_id = proc[entry_point].nxt
         while current_id != None:
             current_block = proc[current_id]
-            print(current_block.scope_level * "\t" + translate_block(current_block))
+            print(current_block.scope_level * "\t" + translate_block(blocks, current_block))
             current_id = current_block.nxt
+        print()
 
     print()
     print('if __name__ == "__main__":')
     print("\tmain()")
 
-def program_parse_blocks(program: dict) -> dict[dict]:
-    # primary dict keys is name of procedure (main, print, so on)
-    blocks = program["blocks"]
+def program_parse_blocks(blocks: dict) -> dict[dict]:
     proc_dict = {}
     main_defined = False
 
@@ -125,7 +133,7 @@ def program_parse_blocks(program: dict) -> dict[dict]:
                 if main_defined:
                     eprint("Only one \"when flag clicked\" block can be used, as it's used as the entry point")
                 else:
-                    main, entry_point = assemble_proc(bkey, blocks)
+                    main, entry_point = assemble_proc(bkey, blocks, main = True)
                     identifier = "main " + entry_point
                     proc_dict[identifier] = main
                     main_defined = True
@@ -135,7 +143,7 @@ def program_parse_blocks(program: dict) -> dict[dict]:
                 if name.startswith("BUILTIN: "):
                     continue
                 else:
-                    proc, entry_point = assemble_proc()
+                    proc, entry_point = assemble_proc(bkey, blocks)
                     identifier = name + " " + entry_point
                     proc_dict[identifier] = proc
 
@@ -146,10 +154,19 @@ def program_parse_blocks(program: dict) -> dict[dict]:
         return proc_dict
 
 # maybe change so builtin gets an empty dict entry
-def assemble_proc(bkey: str, blocks: dict) -> (dict, str): # todo: procedure arguments
+def assemble_proc(bkey: str, blocks: dict, main: bool = False) -> (dict, str): # todo: procedure arguments
     proc = {}
     block = blocks[bkey]
-    entry_point = ckey = block["next"]
+    opcode = Block.get_opcode(block["opcode"])
+    if not main:
+       # print(blocks[block["inputs"]["custom_block"][1]]["mutation"]["argumentnames"])
+       # exit(0)
+        proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"], block["next"], block["fields"], 1, blocks[block["inputs"]["custom_block"][1]]["mutation"]["argumentnames"])
+    else:
+        proc[bkey] = Block(None, None, None, block["next"], None, 0)
+
+    entry_point = bkey
+    ckey = block["next"]
     while ckey != None:
         cblock = blocks[ckey]
         copcode = Block.get_opcode(cblock["opcode"])
@@ -174,13 +191,21 @@ def program_get_vars(program: dict) -> list[(str, str)]:
         var_list.append((var_name, var_val))
     return var_list
 
-def translate_block(block: Block) -> str:
+# Should be changed to something more general, argument-wise, once more cases have been covered
+def translate_block(blocks: dict, block: Block) -> str:
     match block.oc:
         case OPCODE.SETVARIABLE:
             operand = block.fields["VARIABLE"][0].replace(" ", "_")
-            new_value = str(block.inputs["VALUE"][1][1])
-            return operand + " = " + new_value
-            #print(block["inputs"][list(block["inputs"].keys())[0]])
+            # Should be a smarter way to do this
+            # Checks if value is provided by an arg_reporter block (as in value is passed through function)
+            if len(block.inputs["VALUE"]) == 2:
+                arg = str(block.inputs["VALUE"][-1][-1])
+            else:
+                # arg reporter sits here in the input field
+                arg_reporter = blocks[block.inputs["VALUE"][1]]
+                # arg reporter tells setvalue which variable it should be set to
+                arg = arg_reporter["fields"]["VALUE"][0]
+            return operand + " = " + arg
         case OPCODE.CALL_PROC:
             # get function name
             num_args = block.proccode.count("%")
@@ -188,7 +213,10 @@ def translate_block(block: Block) -> str:
                 arg = block.inputs[list(block.inputs.keys())[0]][1][1]
             else:
                 arg = ""
-            name = block.proccode.split(" %")[0].split("BUILTIN: ")[1]
+            if block.proccode.startswith("BUILTIN: "):
+                name = block.proccode.split(" %")[0].split("BUILTIN: ")[1]
+            else:
+                name = block.proccode.split(" %")[0]
             return f"{name}({arg})"
         case opcode:
             assert False,f"opcode {opcode} not translatable (yet)"
