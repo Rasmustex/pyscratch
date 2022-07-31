@@ -159,8 +159,6 @@ def assemble_proc(bkey: str, blocks: dict, main: bool = False) -> (dict, str): #
     block = blocks[bkey]
     opcode = Block.get_opcode(block["opcode"])
     if not main:
-       # print(blocks[block["inputs"]["custom_block"][1]]["mutation"]["argumentnames"])
-       # exit(0)
         proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"], block["next"], block["fields"], 1, blocks[block["inputs"]["custom_block"][1]]["mutation"]["argumentnames"])
     else:
         proc[bkey] = Block(None, None, None, block["next"], None, 0)
