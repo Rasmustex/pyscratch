@@ -2,3 +2,17 @@
 yep ._. It is what you think it is.
 
 Scratch-to-python translator, aimed at making scratch a /useable/ (not /useful/) language for scientific computing and machine learning
+** Goals
+These are my goals for what scratch with pyscratch should be capable of, and serves as a TODO list
+- [X] Create and set variables
+- [X] Define and call procedures (one or zero arguments)
+- [ ] Define and call procedures (more than one argument)
+- [ ] Store function return values in a non-hacky way (can be done hackily by assigning a variable to a normal python function call)
+- [ ] Non-hacky arithmetic expressions
+- [ ] Loops
+- [ ] Conditions/Control-flow
+- [ ] Lists
+- [ ] Import python libraries
+- [ ] Classes from python libraries
+- [ ] Enable use of builtin python functions
+- [ ] Clean up code
