@@ -1,2 +1,0 @@
-# pyscratch
-yep ._.

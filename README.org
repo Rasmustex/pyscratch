@@ -1,0 +1,4 @@
+* Pyscratch
+yep ._. It is what you think it is.
+
+Scratch-to-python translator, aimed at making scratch a /useable/ (not /useful/) language for scientific computing and machine learning
