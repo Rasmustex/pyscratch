@@ -1,25 +1,40 @@
 import json as js
+"""
+Python script intended to translate scratch to python
+"""
+
 import sys
 from enum import Enum
 from typing import Tuple
 
-class OPCODE(Enum): # All of the scratch opcodes that are supported
+
+class OPCODE(Enum):
+    """Defines the different supported scratch opcodes."""
+
     DEF_MAIN = 0
     DEF_PROC = 1
     CALL_PROC = 2
     SETVARIABLE = 3
 
-class Block: # maybe do some of the value processing in the initialiser
-    def __init__(self, oc: OPCODE, inputs: dict, prnt: str, nxt: str, fields: dict, scope_level: int):
+
+class Block:
+    """Represents a scratch block."""
+
+    # maybe do some of the value processing in the initialiser
+    def __init__(self, oc: OPCODE, inputs: dict,
+                 prnt: str, nxt: str, fields: dict, scope_level: int):
+        """Set fields to provided values."""
         self.oc = oc
         self.inputs = inputs
         self.prnt = prnt
         self.nxt = nxt
         self.fields = fields
         self.scope_level = scope_level
+
     @staticmethod
-    #TODO: Modify so builtin functions are supported, meaning we pass the entire block
+    # TODO: Build more general interpretation function
     def get_opcode(op: str) -> OPCODE:
+        """Translate scratch block opcode to OPCODE enum."""
         match op:
             case "event_whenflagclicked":
                 return OPCODE.DEF_MAIN
@@ -30,26 +45,42 @@ class Block: # maybe do some of the value processing in the initialiser
             case "procedures_call":
                 return OPCODE.CALL_PROC
             case opcode:
-                assert False,f'opcode {opcode} not implemented yet'
+                assert False, f'opcode {opcode} not implemented yet'
 
-class ProcCall(Block): # include procedure name and stuff
-    def __init__(self, oc: OPCODE, inputs: dict, prnt: str, nxt: str, fields: dict, scope_level: int, proccode: str):
+
+class ProcCall(Block):
+    """Modified block class for process calls. Contains proccode."""
+
+    def __init__(self, oc: OPCODE, inputs: dict,
+                 prnt: str, nxt: str, fields: dict,
+                 scope_level: int, proccode: str):
+        """Block init modified to include proccode."""
         super().__init__(oc, inputs, prnt, nxt, fields, scope_level)
         self.proccode = proccode
 
-class ProcProt(Block): # include procedure name and stuff
-    def __init__(self, oc: OPCODE, inputs: dict, prnt: str, nxt: str, fields: dict, scope_level: int, argnames: list[str]):
+
+class ProcProt(Block):
+    """Modified block class for process prototypes. Contains argument names."""
+
+    def __init__(self, oc: OPCODE, inputs: dict,
+                 prnt: str, nxt: str, fields: dict,
+                 scope_level: int, argnames: list[str]):
+        """Block init modified to include proccode."""
         super().__init__(oc, inputs, prnt, nxt, fields, scope_level)
         self.argnames = argnames
 
+
 def main():
+    """Translate project.json from scratch to python."""
     progname, fname = handle_args(sys.argv)
     program = parse_scratch_json(fname)
     translate_program(program)
 
+
 def handle_args(args: list[str]) -> Tuple[str, str]:
     """
-    Handles command line arguments
+    Handle command line arguments.
+
     Input: command line arguments: list[str]
     Output: tuple(progname, fname)
     progname: argv[0]
@@ -67,9 +98,11 @@ def handle_args(args: list[str]) -> Tuple[str, str]:
         exit(1)
     return (progname, fname)
 
+
 def parse_scratch_json(fname: str) -> dict:
     """
-    Parses scratch project.json
+    Parse scratch project.json into dict.
+
     Input:
     fname: str - name of input file
     Output: dictionary of parsed project.json
@@ -80,18 +113,18 @@ def parse_scratch_json(fname: str) -> dict:
     f.close()
     return program
 
+
 def translate_program(program: dict):
-    """
-    Translates parsed scratch JSON file to python
-    """
+    """Translate parsed scratch JSON file to python."""
     blocks = program["blocks"]
     procs = program_parse_blocks(blocks)
     variables = program_get_vars(program)
 
     for variable in variables:
-        var_name = variable[0].replace(" ", "_") # maybe move replace to program_get_vars
+        # maybe move replace to program_get_vars
+        var_name = variable[0].replace(" ", "_")
         var_value = variable[1]
-        print(var_name + " = " + variable[1])
+        print(var_name + " = " + var_value)
     print()
 
     for proc_id in procs:
@@ -99,7 +132,9 @@ def translate_program(program: dict):
         proc_name, entry_point = proc_id.split(" ")
         if proc_name != "main":
             argnames = proc[entry_point].argnames
-            print("def " + proc_name + "(" + ''.join(c for c in argnames if c not in "[]\"") + "):") # TODO: prettier, check multiple function arguments
+            # TODO: prettier, check multiple function arguments
+            print("def " + proc_name + "(" +
+                  ''.join(c for c in argnames if c not in "[]\"") + "):")
         else:
             print("def main ():")
 
@@ -109,9 +144,10 @@ def translate_program(program: dict):
 
         print()
         current_id = proc[entry_point].nxt
-        while current_id != None:
+        while current_id is not None:
             current_block = proc[current_id]
-            print(current_block.scope_level * "\t" + translate_block(blocks, current_block))
+            print(current_block.scope_level * "\t" +
+                  translate_block(blocks, current_block))
             current_id = current_block.nxt
         print()
 
@@ -119,21 +155,23 @@ def translate_program(program: dict):
     print('if __name__ == "__main__":')
     print("\tmain()")
 
-def program_parse_blocks(blocks: dict) -> dict[str,dict]:
+
+def program_parse_blocks(blocks: dict) -> dict[str, dict]:
+    """Translate program JSON blocks into Proc chains."""
     proc_dict = {}
     main_defined = False
 
     for bkey in blocks:
         block = blocks[bkey]
         # get all root blocks
-        if block["parent"] == None:
+        if block["parent"] is None:
             opcode = Block.get_opcode(block["opcode"])
             # put together main function
             if opcode == OPCODE.DEF_MAIN:
                 if main_defined:
                     eprint("Only one \"when flag clicked\" block can be used, as it's used as the entry point")
                 else:
-                    main, entry_point = assemble_proc(bkey, blocks, main = True)
+                    main, entry_point = assemble_proc(bkey, blocks, main=True)
                     identifier = "main " + entry_point
                     proc_dict[identifier] = main
                     main_defined = True
@@ -153,33 +191,46 @@ def program_parse_blocks(blocks: dict) -> dict[str,dict]:
     else:
         return proc_dict
 
+
 # maybe change so builtin gets an empty dict entry
-def assemble_proc(bkey: str, blocks: dict, main: bool = False) -> Tuple[dict, str]: # todo: procedure arguments
+# todo: multiple procedure arguments
+def assemble_proc(bkey: str, blocks: dict,
+                  main: bool = False) -> Tuple[dict, str]:
+    """Assembles proc from head block."""
     proc = {}
     block = blocks[bkey]
     opcode = Block.get_opcode(block["opcode"])
     if not main:
-        proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"], block["next"], block["fields"], 1, blocks[block["inputs"]["custom_block"][1]]["mutation"]["argumentnames"])
+        proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"],
+                              block["next"], block["fields"], 1,
+                              blocks[block["inputs"]["custom_block"][1]]["mutation"]["argumentnames"])
     else:
-        proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"], block["next"], block["fields"], 0, [""])
+        proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"],
+                              block["next"], block["fields"], 0, [""])
 
     entry_point = bkey
     ckey = block["next"]
-    while ckey != None:
+    while ckey is not None:
         cblock = blocks[ckey]
         copcode = Block.get_opcode(cblock["opcode"])
 
         match copcode:
             case OPCODE.CALL_PROC:
-                proc[ckey] = ProcCall(copcode, cblock["inputs"], cblock["parent"], cblock["next"], cblock["fields"], 1, cblock["mutation"]["proccode"])
+                proc[ckey] = ProcCall(copcode, cblock["inputs"],
+                                      cblock["parent"], cblock["next"],
+                                      cblock["fields"], 1,
+                                      cblock["mutation"]["proccode"])
             case _:
-                proc[ckey] = Block(copcode, cblock["inputs"], cblock["parent"], cblock["next"], cblock["fields"], 1)
+                proc[ckey] = Block(copcode, cblock["inputs"], cblock["parent"],
+                                   cblock["next"], cblock["fields"], 1)
 
         ckey = cblock["next"]
 
     return (proc, entry_point)
 
+
 def program_get_vars(program: dict) -> list[Tuple[str, str]]:
+    """Extract program variables into list of names and values."""
     variables = program["variables"]
     var_list = []
     for varkey in variables:
@@ -189,13 +240,17 @@ def program_get_vars(program: dict) -> list[Tuple[str, str]]:
         var_list.append((var_name, var_val))
     return var_list
 
-# Should be changed to something more general, argument-wise, once more cases have been covered
+
+# Should be changed to something more general, argument-wise,
+# once more cases have been covered
 def translate_block(blocks: dict, block: Block) -> str:
+    """Tramslate block to valid printable python statement."""
     match block.oc:
         case OPCODE.SETVARIABLE:
             operand = block.fields["VARIABLE"][0].replace(" ", "_")
             # Should be a smarter way to do this
-            # Checks if value is provided by an arg_reporter block (as in value is passed through function)
+            # Checks if value is provided by an arg_reporter block
+            # (as in value is passed through function)
             if len(block.inputs["VALUE"]) == 2:
                 arg = str(block.inputs["VALUE"][-1][-1])
             else:
@@ -217,15 +272,20 @@ def translate_block(blocks: dict, block: Block) -> str:
                 name = block.proccode.split(" %")[0]
             return f"{name}({arg})"
         case opcode:
-            assert False,f"opcode {opcode} not translatable (yet)"
+            assert False, f"opcode {opcode} not translatable (yet)"
+
 
 def eprint(*args, **kwargs):
+    """Print error."""
     print("[ERROR]: ", *args, file=sys.stderr, **kwargs)
 
+
 def print_usage(name: str):
+    """Print help for the program."""
     print(name + ":", file=sys.stderr)
     print("Usage: python " + name + " [file]", file=sys.stderr)
     print("[file]: name of input scratch JSON file to be compiled", file=sys.stderr)
+
 
 if __name__ == "__main__":
     main()
