@@ -1,6 +1,7 @@
 import json as js
 import sys
 from enum import Enum
+from typing import Tuple
 
 class OPCODE(Enum): # All of the scratch opcodes that are supported
     DEF_MAIN = 0
@@ -29,7 +30,6 @@ class Block: # maybe do some of the value processing in the initialiser
             case "procedures_call":
                 return OPCODE.CALL_PROC
             case opcode:
-                return None
                 assert False,f'opcode {opcode} not implemented yet'
 
 class ProcCall(Block): # include procedure name and stuff
@@ -47,7 +47,7 @@ def main():
     program = parse_scratch_json(fname)
     translate_program(program)
 
-def handle_args(args: list[str]) -> (str, str):
+def handle_args(args: list[str]) -> Tuple[str, str]:
     """
     Handles command line arguments
     Input: command line arguments: list[str]
@@ -62,7 +62,7 @@ def handle_args(args: list[str]) -> (str, str):
         exit(1)
     fname = args.pop(0)
     if len(args) != 0:
-        eprint("Argument(s) " + args + " not recognised")
+        eprint("Argument(s) ", args, " not recognised")
         print_usage(progname)
         exit(1)
     return (progname, fname)
@@ -101,7 +101,7 @@ def translate_program(program: dict):
             argnames = proc[entry_point].argnames
             print("def " + proc_name + "(" + ''.join(c for c in argnames if c not in "[]\"") + "):") # TODO: prettier, check multiple function arguments
         else:
-            print("def " + proc_name + "():") # TODO: function arguments
+            print("def main ():")
 
         for variable in variables:
             var_name = variable[0].replace(" ", "_")
@@ -119,7 +119,7 @@ def translate_program(program: dict):
     print('if __name__ == "__main__":')
     print("\tmain()")
 
-def program_parse_blocks(blocks: dict) -> dict[dict]:
+def program_parse_blocks(blocks: dict) -> dict[str,dict]:
     proc_dict = {}
     main_defined = False
 
@@ -154,14 +154,14 @@ def program_parse_blocks(blocks: dict) -> dict[dict]:
         return proc_dict
 
 # maybe change so builtin gets an empty dict entry
-def assemble_proc(bkey: str, blocks: dict, main: bool = False) -> (dict, str): # todo: procedure arguments
+def assemble_proc(bkey: str, blocks: dict, main: bool = False) -> Tuple[dict, str]: # todo: procedure arguments
     proc = {}
     block = blocks[bkey]
     opcode = Block.get_opcode(block["opcode"])
     if not main:
         proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"], block["next"], block["fields"], 1, blocks[block["inputs"]["custom_block"][1]]["mutation"]["argumentnames"])
     else:
-        proc[bkey] = Block(None, None, None, block["next"], None, 0)
+        proc[bkey] = ProcProt(opcode, block["inputs"], block["parent"], block["next"], block["fields"], 0, [""])
 
     entry_point = bkey
     ckey = block["next"]
@@ -179,7 +179,7 @@ def assemble_proc(bkey: str, blocks: dict, main: bool = False) -> (dict, str): #
 
     return (proc, entry_point)
 
-def program_get_vars(program: dict) -> list[(str, str)]:
+def program_get_vars(program: dict) -> list[Tuple[str, str]]:
     variables = program["variables"]
     var_list = []
     for varkey in variables:
