@@ -1,8 +1,6 @@
-import json as js
-"""
-Python script intended to translate scratch to python
-"""
+"""Python script intended to translate scratch to python."""
 
+import json as js
 import sys
 from enum import Enum
 from typing import Tuple
